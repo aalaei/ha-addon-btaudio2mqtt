@@ -66,6 +66,7 @@ Once installed, you must configure the add-on before starting it.
     }
   ]
 }
+```
 
 ## Acknowledgements
 

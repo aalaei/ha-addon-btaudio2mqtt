@@ -5,6 +5,7 @@ ENV LANG=C.UTF-8
 
 RUN apk add --no-cache \
     python3 \
+    py3-pip \
     pulseaudio-utils \
     alsa-utils \
     alsa-plugins-pulse \

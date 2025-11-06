@@ -1,0 +1,28 @@
+name: "Bluetooth Audio MQTT Bridge"
+description: "Control multiple Bluetooth speakers via PulseAudio and MQTT"
+version: "1.1.0"
+slug: "bluetooth_audio_mqtt_bridge"
+init: false
+arch:
+  - aarch64
+  - armv7
+  - amd64
+host_network: true
+services:
+  - "mqtt:need"
+audio: true
+privileged:
+  - SYS_ADMIN # Needed for bluetoothctl
+homeassistant_api: true
+hassio_api: true
+hassio_role: admin
+map:
+  - "dbus:ro" # Add this to access the host's D-Bus for Bluetooth
+
+options:
+  devices: []
+
+schema:
+  devices:
+    - mac_address: str
+      friendly_name: str

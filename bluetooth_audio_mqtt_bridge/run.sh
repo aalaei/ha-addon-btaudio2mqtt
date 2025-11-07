@@ -17,5 +17,17 @@ bashio::log.info "MQTT Host: ${MQTT_HOST}:${MQTT_PORT}"
 bashio::log.info "MQTT User: ${MQTT_USER}"
 bashio::log.info "Pulse Server: ${PULSE_SERVER}"
 
+set -e
+
+echo "[run.sh] Starting D-Bus..."
+dbus-daemon --system
+
+echo "[run.sh] Starting Bluetooth daemon..."
+bluetoothd &
+
+pulseaudio --system --disallow-exit --daemonize
+
+sleep 3 # Give daemons a few seconds to start up
+
 # Run the main script
 python3 -u /run.py

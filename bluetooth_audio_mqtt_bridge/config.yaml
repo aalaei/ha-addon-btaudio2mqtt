@@ -11,6 +11,8 @@ host_network: true
 services:
   - "mqtt:need"
 audio: true
+host_dbus: true
+bluetooth: true
 privileged:
   - SYS_ADMIN # Needed for bluetoothctl
 homeassistant_api: true

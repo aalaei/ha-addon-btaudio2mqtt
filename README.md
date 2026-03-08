@@ -14,66 +14,119 @@ This add-on discovers Bluetooth speakers paired with your Home Assistant host, c
 
 ## Features
 
-* **Multi-Device Support**: Configure multiple Bluetooth speakers and control them all.
-* **Auto-Discovery**: Each configured speaker gets its own device in Home Assistant via MQTT Discovery.
-* **Full Control**: Provides entities for:
-    * **Connect/Disconnect** (Switch)
-    * **Volume Control** (Number)
-    * **Mute** (Switch)
-    * **Set as Default Sink** (Button)
-    * **Pair / Unpair** (Buttons)
-    * **Connection Status** (Binary Sensor)
-* **Direct Control**: Uses `pactl` and `bluetoothctl` directly for robust control without shell command dependencies.
+- **Multi-Device Support**: Configure any number of Bluetooth speakers, each with its own set of HA entities.
+- **Auto-Discovery**: Each configured speaker gets its own device in Home Assistant via MQTT Discovery.
+- **Accurate Connection State**: Uses `bluetoothctl` as ground truth for Bluetooth state. PulseAudio cards persist in memory after disconnection — this add-on reads directly from the Bluetooth daemon to avoid false "connected" readings.
+- **Full Control**: Each speaker exposes the following entities:
+  - **Connect / Disconnect** (Switch) — with retry logic and auto-reconnect on unexpected drops
+  - **Volume Control** (Number, 0–100)
+  - **Mute** (Switch)
+  - **Set as Default Sink** (Button)
+  - **Pair / Unpair** (Buttons, under Configuration category)
+  - **Connection Status** (Binary Sensor with JSON attributes)
+- **Configurable Behaviour**: Poll interval, MQTT base topic, auto-reconnect, and per-device options are all configurable from the add-on dashboard.
 
-## 1. Prerequisites
+---
 
-Before you install this add-on, you **must** pair your Bluetooth speaker(s) with your Home Assistant host system. This add-on can *control* connections, but it cannot perform the initial pairing process if the device is unknown to the host.
+## Prerequisites
 
-You can often pair devices by going to **Settings > Devices & Services > Bluetooth** and adding the device there. Once it's been successfully paired with HA, this add-on will be able to control it.
+Before installing this add-on, **pair your Bluetooth speaker(s)** with your Home Assistant host. This add-on can reconnect, control, and monitor paired devices — but it cannot perform an initial pairing from scratch with an unknown device.
 
-## 2. Installation
+Pair devices via **Settings > System > Hardware > Bluetooth** or via the HA Bluetooth integration.
 
-1.  Click the "Add Repository" button above.
-2.  Alternatively, navigate to the Home Assistant Add-on Store:
-    * Go to **Settings > Add-ons > Add-on Store**.
-    * Click the 3-dots menu in the top-right and select **Repositories**.
-    * Paste `https://github.com/aalaei/ha-addon-btaudio2mqtt` into the box and click **Add**.
-3.  Find the "Bluetooth Audio MQTT Bridge" add-on in the store and click **Install**.
-4.  Wait for the installation to complete.
+---
 
-## 3. Configuration
+## Installation
 
-Once installed, you must configure the add-on before starting it.
+1. Click the **Add Repository** button above, or manually add the repository URL:
+   - Go to **Settings > Add-ons > Add-on Store**
+   - Click the 3-dot menu → **Repositories**
+   - Paste `https://github.com/aalaei/ha-addon-btaudio2mqtt` and click **Add**
+2. Find **Bluetooth Audio MQTT Bridge** in the store and click **Install**.
+3. After installation, go to the **Configuration** tab before starting.
 
-1.  Go to **Settings > Add-ons > Bluetooth Audio MQTT Bridge**.
-2.  Click the **"Configuration"** tab.
-3.  Add your speakers to the `devices` list. You must provide a `mac_address` and a `friendly_name` for each one.
+---
 
+## Configuration
 
+All options are set via the **Configuration** tab in the add-on UI.
 
-**Example `options.json`:**
+| Option | Type | Default | Description |
+|---|---|---|---|
+| `mqtt_base_topic` | string | `btaudio2mqtt` | Root MQTT topic for all devices |
+| `poll_interval` | int | `10` | How often (seconds) to poll and publish device state |
+| `auto_reconnect` | bool | `true` | Automatically reconnect if a device drops unexpectedly |
+| `devices` | list | `[]` | List of Bluetooth speakers to manage |
+
+Each entry in `devices` supports:
+
+| Option | Type | Required | Default | Description |
+|---|---|---|---|---|
+| `mac_address` | string | Yes | — | Bluetooth MAC address (e.g. `D0:C9:07:90:57:6B`) |
+| `friendly_name` | string | Yes | — | Display name in Home Assistant |
+| `auto_connect` | bool | No | `false` | Attempt to connect automatically on add-on start |
+| `reconnect_attempts` | int | No | `3` | Number of connect retries before giving up |
+
+**Example configuration:**
 
 ```json
 {
+  "mqtt_base_topic": "btaudio2mqtt",
+  "poll_interval": 10,
+  "auto_reconnect": true,
   "devices": [
     {
       "mac_address": "D0:C9:07:90:57:6B",
-      "friendly_name": "Govee Speaker"
+      "friendly_name": "Govee Speaker",
+      "auto_connect": true,
+      "reconnect_attempts": 3
     },
     {
       "mac_address": "AA:BB:CC:DD:EE:FF",
-      "friendly_name": "Living Room Soundbar"
+      "friendly_name": "Living Room Soundbar",
+      "auto_connect": false,
+      "reconnect_attempts": 5
     }
   ]
 }
 ```
 
+---
+
+## MQTT Topic Structure
+
+Each device uses the following topic layout (replace `{name}` with the lowercase, underscore-separated `friendly_name`):
+
+| Topic | Direction | Description |
+|---|---|---|
+| `{base}/{name}/state/connection` | Published | `ON` / `OFF` connection state |
+| `{base}/{name}/state/volume` | Published | Current volume (0–100) |
+| `{base}/{name}/state/mute` | Published | `ON` / `OFF` mute state |
+| `{base}/{name}/status` | Published | JSON blob with full status |
+| `{base}/{name}/set/connect` | Subscribe | `ON` to connect, `OFF` to disconnect |
+| `{base}/{name}/set/volume` | Subscribe | Integer 0–100 |
+| `{base}/{name}/set/mute` | Subscribe | `ON` / `OFF` |
+| `{base}/{name}/set/setsink` | Subscribe | `PRESS` to set as default audio output |
+| `{base}/{name}/set/pair` | Subscribe | `PRESS` to pair and trust device |
+| `{base}/{name}/set/unpair` | Subscribe | `PRESS` to remove device |
+
+---
+
+## How It Works
+
+- **Bluetooth state**: `bluetoothctl info {MAC}` is used as the primary check — this reads directly from the BlueZ daemon and is not affected by stale PulseAudio state.
+- **Audio state** (volume, mute, default sink): Read via the HA Supervisor audio API (`/audio/info`), which returns structured data for all PulseAudio outputs.
+- **Set commands**: Routed back through the Supervisor API (`/audio/volume/output`, `/audio/mute/output`, `/audio/default/output`).
+- **Connect/Disconnect**: Run via `bluetoothctl connect/disconnect` piped as a subprocess, followed by an audio reload to re-register the PulseAudio card.
+
+---
+
 ## Acknowledgements
 
-This add-on was inspired by and adapted from the work of [adrgumula](https://github.com/adrgumula) on the [HomeAssitantBluetoothSpeaker](https://github.com/adrgumula/HomeAssitantBluetoothSpeaker) repository. Thank you for providing the original foundation and concept!
+This add-on was inspired by the work of [adrgumula](https://github.com/adrgumula) on [HomeAssitantBluetoothSpeaker](https://github.com/adrgumula/HomeAssitantBluetoothSpeaker). Thank you for the original concept and foundation.
 
 ---
 
 ## License
 
-This project is licensed under the MIT License - see the `LICENSE` file for details.
+This project is licensed under the MIT License — see the `LICENSE` file for details.

@@ -1,4 +1,5 @@
 # Bluetooth Audio MQTT Bridge - Home Assistant Add-on
+# this repo is archived, there're better addons avialble now! https://github.com/trudenboy/sendspin-bt-bridge
 
 [![hacs_badge](https://img.shields.io/badge/HACS-Default-orange.svg?style=for-the-badge)](https://github.com/hacs/integration)
 ![GitHub Release](https://img.shields.io/github/v/release/aalaei/ha-addon-btaudio2mqtt?style=for-the-badge)
